@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SASA Teknoloji Bülteni</title>
+    <script src="js/page-flip.browser.min.js"></script>
+    <style>
+        body { 
+            background-color: #1a1a1a; 
+            display: flex; justify-content: center; align-items: center; 
+            min-height: 100vh; margin: 0; 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            overflow: hidden; 
+        }
+        
+        #presentation-wrapper {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            width: 100%; height: 100%; padding: 20px; box-sizing: border-box;
+        }
+
+        /* Kitap ve Okların Kapsayıcısı */
+        .book-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            max-width: 1200px; /* Oklar için yanlarda pay bıraktık */
+        }
+
+        .container { 
+            width: 100%; 
+            max-width: 1000px; 
+            display: flex; 
+            justify-content: center; 
+        }
+
+        .flip-book { box-shadow: 0 20px 50px rgba(0,0,0,0.5); cursor: zoom-in !important; }
+        .page { background-color: white; overflow: hidden; }
+        .page-content { width: 100%; height: 100%; display: flex; flex-direction: column; }
+        .page-content img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+        
+        /* --- MİNİMALİST YAN OKLAR --- */
+        .nav-arrow {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.2);
+            font-size: 50px;
+            font-weight: 100;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            padding: 20px;
+            user-select: none;
+            z-index: 10;
+        }
+
+        .nav-arrow:hover { color: rgba(255, 255, 255, 0.8); }
+        .nav-arrow.left { left: 0; }
+        .nav-arrow.right { right: 0; }
+
+        /* --- ZOOM PANELİ --- */
+        #zoom-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.96); z-index: 3000; overflow: auto;
+            cursor: pointer; user-select: none;
+        }
+        #zoomed-image { 
+            display: block; margin: 60px auto; width: 1000px; max-width: 85vw;
+            height: auto; border-radius: 4px; box-shadow: 0 0 60px #000;
+            pointer-events: none; cursor: default;
+        }
+
+        /* Sayfa Bilgisi (Alt orta kısım) */
+        .page-info { 
+            margin-top: 25px;
+            color: #555; 
+            font-size: 13px; 
+            font-family: monospace; 
+            letter-spacing: 2px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="zoom-overlay">
+    <img id="zoomed-image" src="" alt="Zoomed Page">
+</div>
+
+<div id="presentation-wrapper">
+    <div class="book-wrapper">
+        <button class="nav-arrow left" id="prevBtn">&#10094;</button>
+        
+        <div class="container">
+            <div id="bultenBook" class="flip-book"></div>
+        </div>
+        
+        <button class="nav-arrow right" id="nextBtn">&#10095;</button>
+    </div>
+    
+    <div class="page-info">
+        <span id="currentPage">1</span> / <span id="totalPagesDisplay">26</span>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const totalPages = 26; 
+        const bookContainer = document.getElementById('bultenBook');
+        const currentPageSpan = document.getElementById('currentPage');
+        const totalPagesSpan = document.getElementById('totalPagesDisplay');
+        const zoomOverlay = document.getElementById('zoom-overlay');
+        const zoomedImg = document.getElementById('zoomed-image');
+        
+        totalPagesSpan.innerText = totalPages;
+
+        for (let i = 1; i <= totalPages; i++) {
+            const page = document.createElement('div');
+            page.className = 'page';
+            page.innerHTML = `<div class="page-content"><img src="pages/${i}.jpg" alt="Sayfa ${i}"></div>`;
+            bookContainer.appendChild(page);
+        }
+
+        const pageFlip = new St.PageFlip(bookContainer, {
+            width: 550, height: 733, size: "stretch", 
+            minWidth: 315, maxWidth: 1000, minHeight: 420, maxHeight: 1350,
+            showCover: true, clickEventForward: false, useMouseEvents: false
+        });
+
+        pageFlip.loadFromHTML(document.querySelectorAll('.page'));
+        pageFlip.on('flip', (e) => { currentPageSpan.innerText = e.data + 1; });
+
+        // Zoom Açılış
+        bookContainer.addEventListener('click', (e) => {
+            const rect = bookContainer.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            let activePageIdx = pageFlip.getCurrentPageIndex();
+            
+            if (pageFlip.getOrientation() === 'landscape' && activePageIdx > 0 && clickX > rect.width / 2) {
+                activePageIdx++;
+            }
+
+            zoomedImg.src = `pages/${activePageIdx + 1}.jpg`;
+            zoomOverlay.style.display = 'block';
+            zoomOverlay.scrollTop = 0;
+        });
+
+        // Sürükle-Kaydır ve Kapatma
+        let isDown = false;
+        let startY;
+        let scrollTop;
+        let hasMoved = false;
+
+        zoomOverlay.addEventListener('mousedown', (e) => {
+            isDown = true;
+            hasMoved = false;
+            zoomOverlay.style.cursor = 'grabbing';
+            startY = e.pageY - zoomOverlay.offsetTop;
+            scrollTop = zoomOverlay.scrollTop;
+        });
+
+        zoomOverlay.addEventListener('mousemove', (e) => {
+            if (!isDown) return;
+            hasMoved = true;
+            e.preventDefault();
+            const y = e.pageY - zoomOverlay.offsetTop;
+            const walk = (y - startY) * 2;
+            zoomOverlay.scrollTop = scrollTop - walk;
+        });
+
+        zoomOverlay.addEventListener('mouseup', (e) => {
+            isDown = false;
+            zoomOverlay.style.cursor = 'pointer';
+            if (!hasMoved && e.target === zoomOverlay) {
+                zoomOverlay.style.display = 'none';
+            }
+        });
+
+        // Ok Butonları ve Klavye Navigasyonu
+        document.getElementById('prevBtn').addEventListener('click', () => pageFlip.flipPrev());
+        document.getElementById('nextBtn').addEventListener('click', () => pageFlip.flipNext());
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === "ArrowLeft") pageFlip.flipPrev();
+            if (e.key === "ArrowRight" || e.key === " ") pageFlip.flipNext();
+            if (e.key === "Escape") zoomOverlay.style.display = 'none';
+        });
+    });
+</script>
+</body>
+</html>
